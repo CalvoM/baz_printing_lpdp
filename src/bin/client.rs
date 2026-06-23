@@ -19,6 +19,9 @@ fn main() -> Result<(), LPDPClientError> {
         .unwrap_or_else(|_| "HP_Color_LaserJet_MFP_M283fdw".to_string());
 
     let mut lpdp_client = LPDPClient::try_new(&queue_name, &lpdp_server)?;
-    lpdp_client.send_printer_job(std::path::Path::new(&args.file_path))?;
+    //let resp = lpdp_client.request_queue_start_short()?;
+    let resp = lpdp_client.request_queue_start_long()?;
+    println!("{resp}");
+    //lpdp_client.send_printer_job(std::path::Path::new(&args.file_path))?;
     Ok(())
 }

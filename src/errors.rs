@@ -14,4 +14,8 @@ pub enum LPDPClientError {
     SystemDetailsError(String),
     #[error("{0}")]
     FileReadError(String),
+    #[error("{0}")]
+    WriteTimeoutError(String),
+    #[error("{0}")]
+    ReadTimeoutError(String),
 }

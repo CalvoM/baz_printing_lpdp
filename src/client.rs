@@ -1,6 +1,7 @@
-use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::{SocketAddr, TcpStream};
 use std::path::Path;
+use std::time::Duration;
 
 use crate::errors::LPDPClientError::{self};
 use crate::utils::{DaemonCommand, ReceiveJobSubCommand};
@@ -13,8 +14,15 @@ pub struct LPDPClient {
 
 impl LPDPClient {
     pub fn try_new(queue_name: &str, server_host: &str) -> Result<Self, LPDPClientError> {
-        let stream = TcpStream::connect(format!("{server_host}:515"))
+        let addr: SocketAddr = format!("{server_host}:515").parse().unwrap();
+        let stream = TcpStream::connect_timeout(&addr, Duration::from_secs(60))
             .map_err(|e| LPDPClientError::UnreachableServer(e.to_string()))?;
+        stream
+            .set_write_timeout(Some(Duration::from_secs(20)))
+            .map_err(|e| LPDPClientError::WriteTimeoutError(e.to_string()))?;
+        stream
+            .set_read_timeout(Some(Duration::from_secs(10)))
+            .map_err(|e| LPDPClientError::ReadTimeoutError(e.to_string()))?;
         Ok(LPDPClient {
             queue_name: queue_name.to_string(),
             server_host: server_host.to_string(),
@@ -69,8 +77,40 @@ impl LPDPClient {
         self.send_printer_abort_job()?;
         Ok(())
     }
-    pub fn request_queue_start_short() {}
-    pub fn request_queue_start_long() {}
+    pub fn request_queue_start_short(&mut self) -> Result<String, LPDPClientError> {
+        let username =
+            whoami::username().map_err(|e| LPDPClientError::SystemDetailsError(e.to_string()))?;
+        let job_cmd: Vec<u8> = [
+            &[DaemonCommand::SendQueueStateJobShort as u8][..],
+            self.queue_name.as_bytes(),
+            b" ",
+            username.as_bytes(),
+            b"\n",
+        ]
+        .concat();
+        self.stream
+            .write_all(&job_cmd)
+            .map_err(|e| LPDPClientError::FailedWrite(e.to_string()))?;
+        let data = self.read_printer_data_until(0x00)?;
+        Ok(data)
+    }
+    pub fn request_queue_start_long(&mut self) -> Result<String, LPDPClientError> {
+        let username =
+            whoami::username().map_err(|e| LPDPClientError::SystemDetailsError(e.to_string()))?;
+        let job_cmd: Vec<u8> = [
+            &[DaemonCommand::SendQueueStateJobLong as u8][..],
+            self.queue_name.as_bytes(),
+            b" ",
+            username.as_bytes(),
+            b"\n",
+        ]
+        .concat();
+        self.stream
+            .write_all(&job_cmd)
+            .map_err(|e| LPDPClientError::FailedWrite(e.to_string()))?;
+        let data = self.read_printer_data_until(0x00)?;
+        Ok(data)
+    }
     pub fn request_job_removal() {}
     fn send_printer_abort_job(&mut self) -> Result<(), LPDPClientError> {
         let job_cmd: Vec<u8> = [&[ReceiveJobSubCommand::Abort as u8][..], b"\n"].concat();
@@ -175,5 +215,14 @@ impl LPDPClient {
             )));
         }
         Ok(())
+    }
+
+    fn read_printer_data_until(&mut self, delimiter: u8) -> Result<String, LPDPClientError> {
+        let mut reader = BufReader::new(&self.stream);
+        let mut buffer = Vec::new();
+        let bytes_read = reader
+            .read_until(delimiter, &mut buffer)
+            .map_err(|e| LPDPClientError::FailedRead(e.to_string()))?;
+        Ok(String::from_utf8(buffer).map_err(|e| LPDPClientError::FailedRead(e.to_string()))?)
     }
 }
