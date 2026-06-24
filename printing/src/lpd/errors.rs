@@ -19,3 +19,12 @@ pub enum LPDPClientError {
     #[error("{0}")]
     ReadTimeoutError(String),
 }
+
+impl serde::Serialize for LPDPClientError {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        serializer.serialize_str(self.to_string().as_ref())
+    }
+}

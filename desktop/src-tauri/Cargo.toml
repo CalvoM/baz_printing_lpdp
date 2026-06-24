@@ -1,8 +1,8 @@
 [package]
-name = "app"
+name = "printer-app"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "An app to see the various printing protocols. "
+authors = ["Calvin Mwadime (mwadimemakokha@gmail.com)"]
 license = ""
 repository = ""
 edition = "2021"
@@ -24,3 +24,5 @@ log = "0.4"
 tauri = { version = "2.11.3", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2.7.1"
+printing = {path="../../printing"}
+
