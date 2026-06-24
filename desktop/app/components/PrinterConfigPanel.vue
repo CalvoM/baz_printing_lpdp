@@ -69,7 +69,7 @@ const summarySubtitle = computed(() => {
           <!-- Protocol pill tabs -->
           <div class="flex gap-1 bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
             <button
-              v-for="p in (['lpd', 'ipp'] as Protocol[])"
+              v-for="p in (['ipp', 'lpd'] as Protocol[])"
               :key="p"
               class="flex-1 py-1.5 text-sm font-medium rounded-md transition-colors"
               :class="protocol === p
@@ -77,7 +77,7 @@ const summarySubtitle = computed(() => {
                 : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'"
               @click="emit('update:protocol', p)"
             >
-              {{ p.toUpperCase() }}
+              {{ p === 'ipp' ? 'IPP' : 'LPD — Legacy' }}
             </button>
           </div>
 

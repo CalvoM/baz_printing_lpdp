@@ -4,8 +4,8 @@ import type { Protocol } from '~/composables/usePrinterConfig'
 const model = defineModel<Protocol>({ required: true })
 
 const items = [
-  { value: 'lpd', label: 'LPD', description: 'Line Printer Daemon (RFC 1179)' },
   { value: 'ipp', label: 'IPP', description: 'Internet Printing Protocol' },
+  { value: 'lpd', label: 'LPD', description: 'Legacy — for older printers (RFC 1179)' },
 ]
 </script>
 

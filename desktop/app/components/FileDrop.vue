@@ -61,7 +61,7 @@ function toggleColorMode() {
         <strong class="text-white font-semibold">Drag and drop</strong> your file here<br>to print
       </p>
       <UButton
-        color="white"
+        color="secondary"
         variant="solid"
         icon="i-lucide-plus"
         label="ADD FILE"
@@ -87,7 +87,7 @@ function toggleColorMode() {
         </button>
       </div>
       <UButton
-        color="white"
+        color="success"
         variant="outline"
         label="CHANGE FILE"
         class="text-white border-white/40 hover:bg-white/10 font-bold tracking-widest mb-8"
