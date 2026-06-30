@@ -6,12 +6,29 @@ use reqwest::{
 
 use crate::ipp::{
     errors::IPPClientError,
-    utils::{IPPOperationRequest, OperationID},
+    utils::{
+        pack_attribute_with_one_value, pack_byte_ipp, AttributeGroupTags, IPPOperationRequestBase,
+        NetworkPackable, OperationID, ValueTags,
+    },
 };
+
 #[repr(C)]
-pub struct SendPrintJobPayload {
-    version: u16,
+#[derive(rkyv::Serialize, rkyv::Deserialize, rkyv::Archive)]
+#[rkyv(derive(Debug))]
+pub struct SendPrintJobRequest {
+    base: IPPOperationRequestBase,
 }
+
+impl NetworkPackable for SendPrintJobRequest {}
+
+#[repr(C)]
+#[derive(rkyv::Serialize, rkyv::Deserialize, rkyv::Archive)]
+#[rkyv(derive(Debug))]
+pub struct GetPrinterAttributesRequest {
+    base: IPPOperationRequestBase,
+}
+
+impl NetworkPackable for GetPrinterAttributesRequest {}
 
 pub struct IPPClient {
     server_host: Url,
@@ -34,31 +51,82 @@ impl IPPClient {
             transport: client,
         })
     }
-    pub fn send_print_job(&mut self) {
+    pub fn send_print_job(&mut self) -> Result<(), IPPClientError> {
         let operation_id = OperationID::PrintJob as u16;
-        let data = IPPOperationRequest {
+        let base_data = IPPOperationRequestBase {
             version: 0x0101,
             operation_id,
             request_id: 0x00000001,
         };
-        let mut expected_data = Vec::new();
-        expected_data.extend_from_slice(&data.version.to_be_bytes());
-        expected_data.extend_from_slice(&data.operation_id.to_be_bytes());
-        expected_data.extend_from_slice(&data.request_id.to_be_bytes());
-        self.transport
-            .post(self.server_host.clone())
-            .body(expected_data)
-            .send()
-            .unwrap();
+        let data = SendPrintJobRequest { base: base_data };
+        let mut expected_data = data.to_bytes()?;
+        self.send_bytes_to_printer(expected_data)?;
+        Ok(())
     }
     pub fn send_print_uri(&self) {}
     pub fn validate_job(&self) {}
     pub fn create_job(&self) {}
-    pub fn get_printer_attributes(&self) {}
+
+    /// Request the values of the attributes of a Printer
+    /// [`Reference`]: https://www.rfc-editor.org/info/rfc8011/#section-4.2.5
+    /// This is a `required` operation.
+    pub fn get_printer_attributes(&mut self) -> Result<(), IPPClientError> {
+        let operation_id = OperationID::GetPrinterAttributes as u16;
+        let base_data = IPPOperationRequestBase {
+            version: 0x0101,
+            operation_id,
+            request_id: 0x00000002,
+        };
+        let data = GetPrinterAttributesRequest { base: base_data };
+        let mut expected_data = data.to_bytes()?;
+        let ops_attr_tag = AttributeGroupTags::OperationAttributesTag as u8;
+        expected_data.push(ops_attr_tag);
+        let attrs_bytes =
+            pack_attribute_with_one_value(ValueTags::Charset, "attributes-charset", "utf-8");
+        expected_data.extend_from_slice(&attrs_bytes);
+        let attrs_bytes = pack_attribute_with_one_value(
+            ValueTags::NaturalLanguage,
+            "attributes-natural-language",
+            "en",
+        );
+        expected_data.extend_from_slice(&attrs_bytes);
+        let attrs_bytes =
+            pack_attribute_with_one_value(ValueTags::URI, "printer-uri", self.server_host.as_str());
+        expected_data.extend_from_slice(&attrs_bytes);
+        let attrs_bytes =
+            pack_attribute_with_one_value(ValueTags::NameWithoutLanguage, "jobname", "test");
+        expected_data.extend_from_slice(&attrs_bytes);
+        // last_byte
+        let end_tag = AttributeGroupTags::EndOfAttributesTag as u8;
+        expected_data.push(end_tag);
+        let printer_attributes_bytes = self.send_bytes_to_from_printer(expected_data)?;
+        Ok(())
+    }
     pub fn get_jobs(&self) {}
     pub fn pause_printer(&self) {}
     pub fn resume_printer(&self) {}
     pub fn purge_jobs(&self) {}
+    fn send_bytes_to_printer(&mut self, data: Vec<u8>) -> Result<(), IPPClientError> {
+        self.transport
+            .post(self.server_host.clone())
+            .body(data)
+            .send()
+            .unwrap();
+        Ok(())
+    }
+    fn send_bytes_to_from_printer(&mut self, data: Vec<u8>) -> Result<Vec<u8>, IPPClientError> {
+        let res = self
+            .transport
+            .post(self.server_host.clone())
+            .body(data)
+            .send()
+            .map_err(|e| IPPClientError::TransportError(e.to_string()))?;
+        let res_bytes = res
+            .bytes()
+            .map_err(|e| IPPClientError::TransportError(e.to_string()))?
+            .to_vec();
+        Ok(res_bytes)
+    }
     fn parse_ipp_url(raw_url: &str) -> Result<Url, IPPClientError> {
         if raw_url.len() > 1023 {
             return Err(IPPClientError::SetupError(

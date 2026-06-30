@@ -37,22 +37,79 @@
 //|                     data                    |   y bytes  - optional
 //-----------------------------------------------
 
+use crate::ipp::errors::IPPClientError;
+
 pub const SUPPORTED_VERSION: u16 = 0x0101; // 1.1
 
 #[repr(C)]
-#[derive(serde::Serialize)]
-pub struct IPPOperationRequest {
+#[derive(rkyv::Serialize, rkyv::Deserialize, rkyv::Archive)]
+#[rkyv(derive(Debug))]
+pub struct IPPOperationRequestBase {
     pub version: u16,
     pub operation_id: u16,
     pub request_id: u32,
 }
 
 #[repr(C)]
-#[derive(serde::Serialize)]
-pub struct IPPOperationResponse {
+#[derive(rkyv::Serialize, rkyv::Deserialize, rkyv::Archive)]
+#[rkyv(derive(Debug))]
+pub struct IPPOperationResponseBase {
     pub version: u16,
     pub status_code: u16,
     pub request_id: u32,
+}
+
+pub trait NetworkPackable
+where
+    Self: for<'a> rkyv::Serialize<
+        rkyv::rancor::Strategy<
+            rkyv::ser::Serializer<
+                rkyv::util::AlignedVec,
+                rkyv::ser::allocator::ArenaHandle<'a>,
+                rkyv::ser::sharing::Share,
+            >,
+            rkyv::rancor::Error,
+        >,
+    >,
+{
+    fn to_bytes(&self) -> Result<Vec<u8>, IPPClientError>
+    where
+        Self: Sized,
+    {
+        Ok(rkyv::to_bytes::<rkyv::rancor::Error>(self)
+            .map_err(|e| IPPClientError::ByteParsingError(e.to_string()))?
+            .into_vec())
+    }
+}
+
+pub fn pack_attribute_with_one_value(value_tag: ValueTags, name: &str, value: &str) -> Vec<u8> {
+    let mut buf: Vec<u8> = Vec::new();
+    let parsed_tag = value_tag as u8;
+    buf.push(parsed_tag);
+    let name_length = name.len() as u16;
+    buf.extend_from_slice(&name_length.to_be_bytes());
+    buf.extend_from_slice(name.as_bytes());
+    let value_length = value.len() as u16;
+    buf.extend_from_slice(&value_length.to_be_bytes());
+    buf.extend_from_slice(value.as_bytes());
+    buf
+}
+pub fn pack_byte_ipp<S>(data: S) -> Result<Vec<u8>, IPPClientError>
+where
+    S: for<'a> rkyv::Serialize<
+        rkyv::rancor::Strategy<
+            rkyv::ser::Serializer<
+                rkyv::util::AlignedVec,
+                rkyv::ser::allocator::ArenaHandle<'a>,
+                rkyv::ser::sharing::Share,
+            >,
+            rkyv::rancor::Error,
+        >,
+    >,
+{
+    Ok(rkyv::to_bytes::<rkyv::rancor::Error>(&data)
+        .map_err(|e| IPPClientError::SendPrintJobError(e.to_string()))?
+        .into_vec())
 }
 
 //Each "attribute-group" field is encoded as follows:

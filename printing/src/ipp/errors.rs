@@ -4,6 +4,12 @@ use thiserror::Error;
 pub enum IPPClientError {
     #[error("{0}")]
     SetupError(String),
+    #[error("{0}")]
+    SendPrintJobError(String),
+    #[error("{0}")]
+    ByteParsingError(String),
+    #[error("{0}")]
+    TransportError(String),
 }
 
 impl serde::Serialize for IPPClientError {

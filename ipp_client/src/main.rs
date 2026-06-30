@@ -11,11 +11,11 @@ struct Cli {
     host: String,
 }
 
-#[dotenvy::load]
 fn main() -> Result<(), IPPClientError> {
     let cli = Cli::parse();
     let ipp_host = cli.host;
     let mut ipp_client = IPPClient::try_new(&ipp_host)?;
-    ipp_client.send_print_job();
+    //ipp_client.send_print_job()?;
+    ipp_client.get_printer_attributes()?;
     Ok(())
 }
